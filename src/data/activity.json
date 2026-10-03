@@ -1,0 +1,12 @@
+[
+  { "id": "ev-101", "ts": "2026-10-02T06:42:00Z", "type": "alert", "severity": "warn", "actor": "DCGM", "message": "vulcan-g06 L40S-3 temp 87°C exceeds 83°C policy — clocks capped 1980→1440MHz", "clusterId": "vulcan-infer" },
+  { "id": "ev-102", "ts": "2026-10-02T06:10:00Z", "type": "job", "severity": "info", "actor": "slurmctld", "message": "job-7007 falcon-40b-sweep-17 queued (8x A100-80GB, pri 80, Q pos 2)", "clusterId": "atlas-train" },
+  { "id": "ev-103", "ts": "2026-10-02T05:48:00Z", "type": "job", "severity": "success", "actor": "k8s", "message": "ep-01 vllm-llama3-70b-prod autoscaled 4→6 replicas (rps 48)", "clusterId": "vulcan-infer" },
+  { "id": "ev-104", "ts": "2026-10-02T04:30:00Z", "type": "job", "severity": "info", "actor": "Tom Becker", "message": "embed-batch-eval submitted requesting 0.25 fractional GPU (Run:AI slice)", "clusterId": "edge-dev" },
+  { "id": "ev-105", "ts": "2026-10-01T22:14:00Z", "type": "gpu", "severity": "error", "actor": "DCGM", "message": "helios-g14 H100-5 XID 79 GPU fell off bus — job-7010 auto-requeue suggested, node draining", "clusterId": "helios-prod" },
+  { "id": "ev-106", "ts": "2026-10-01T18:02:00Z", "type": "cluster", "severity": "info", "actor": "Zara Ahmed", "message": "edge-dev provisioning: 2x RTX4090 nodes zero-touch PXE 68% complete", "clusterId": "edge-dev" },
+  { "id": "ev-107", "ts": "2026-10-01T12:00:00Z", "type": "system", "severity": "success", "actor": "GPU Operator", "message": "helios-prod driver 550.127 + container toolkit rollout complete (16/16 nodes)", "clusterId": "helios-prod" },
+  { "id": "ev-108", "ts": "2026-09-30T08:20:00Z", "type": "job", "severity": "error", "actor": "slurmctld", "message": "job-7010 llama3-8b-rlhf FAILED NCCL timeout rank 5 — checkpoint ckpt-step-9100 preserved", "clusterId": "helios-prod" },
+  { "id": "ev-109", "ts": "2026-09-29T10:31:00Z", "type": "job", "severity": "success", "actor": "slurmctld", "message": "job-7002 mixtral-8x22b-sft-v3 started on 16x H100 (helios-g03..g04)", "clusterId": "helios-prod" },
+  { "id": "ev-110", "ts": "2026-09-28T08:05:00Z", "type": "job", "severity": "success", "actor": "GPUStack", "message": "tensorrt-llm-optim completed INT4 AWQ build, p99 latency -38%", "clusterId": "vulcan-infer" }
+]

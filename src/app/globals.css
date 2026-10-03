@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  background: #060607;
+  color: #e7e9ea;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0c0d0e; }
+::-webkit-scrollbar-thumb { background: #2a2d30; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3e42; }
+
+.glass {
+  background: linear-gradient(180deg, rgba(26,28,30,0.9), rgba(12,13,14,0.95));
+  border: 1px solid #232527;
+}
+
+.nv-text-glow { text-shadow: 0 0 18px rgba(118,185,0,0.6); }
+
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(118,185,0,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(118,185,0,0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+.live-dot { animation: pulse-dot 1.6s ease-in-out infinite; }
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.recharts-wrapper :focus { outline: none; }
+
+/* ————— Light mode (html.light). Dark is the default, defined above. ————— */
+html.light body {
+  background: #f4f4f5;
+  color: #27272a;
+}
+
+html.light ::-webkit-scrollbar-track { background: #e9eaec; }
+html.light ::-webkit-scrollbar-thumb { background: #c9ccd1; }
+html.light ::-webkit-scrollbar-thumb:hover { background: #a8adb4; }
+
+html.light .glass {
+  background: linear-gradient(180deg, #ffffff, #fafafa);
+  border: 1px solid #e4e4e7;
+}
+
+html.light .nv-text-glow { text-shadow: none; }
+
+html.light .grid-bg {
+  background-image:
+    linear-gradient(rgba(77,122,0,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(77,122,0,0.07) 1px, transparent 1px);
+}
+
+/* surfaces */
+html.light .bg-void { background-color: #f4f4f5; }
+html.light .bg-void\/90 { background-color: rgba(244,244,245,0.9); }
+html.light .bg-panel { background-color: #ffffff; }
+html.light .bg-panel2 { background-color: #fafafa; }
+html.light .bg-panel3 { background-color: #f4f4f5; }
+html.light .bg-black\/30 { background-color: rgba(0,0,0,0.04); }
+html.light .bg-black\/40 { background-color: rgba(0,0,0,0.05); }
+html.light .bg-zinc-800 { background-color: #e4e4e7; }
+
+/* hairlines */
+html.light .border-line { border-color: #e4e4e7; }
+html.light .ring-line { --tw-ring-color: #e4e4e7; }
+
+/* text ramp (dark-on-light) */
+html.light .text-white { color: #18181b; }
+html.light .text-zinc-200 { color: #27272a; }
+html.light .text-zinc-300 { color: #3f3f46; }
+html.light .text-zinc-400 { color: #5b5f66; }
+html.light .text-zinc-500 { color: #71717a; }
+html.light .text-zinc-600 { color: #a1a1aa; }
+
+/* brand + semantics stay vivid but legible on white */
+html.light .text-nv { color: #4d7a00; }
+html.light .text-amberx { color: #b45309; }
+html.light .text-cyanx { color: #0e7490; }
+html.light .text-violetx { color: #7c3aed; }
+html.light .text-rose { color: #e11d48; }
+
+/* terminal-style log blocks stay dark in both modes */
+html.light pre.text-nv { color: #a3e635; }
+html.light pre {
+  background-color: rgba(6,6,7,0.92);
+  border: 1px solid #232527;
+}

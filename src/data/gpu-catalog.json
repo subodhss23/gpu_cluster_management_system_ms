@@ -1,0 +1,82 @@
+[
+  {
+    "model": "H100",
+    "vendor": "NVIDIA",
+    "memoryGB": 80,
+    "fp16TFLOPS": 989,
+    "powerW": 700,
+    "migSlices": [1, 2, 3, 4, 7],
+    "interconnect": "NVLink 900GB/s + InfiniBand NDR",
+    "pricePerHr": 3.5
+  },
+  {
+    "model": "H200",
+    "vendor": "NVIDIA",
+    "memoryGB": 141,
+    "fp16TFLOPS": 989,
+    "powerW": 700,
+    "migSlices": [1, 2, 3, 4, 7],
+    "interconnect": "NVLink 900GB/s + InfiniBand NDR",
+    "pricePerHr": 4.2
+  },
+  {
+    "model": "A100-80GB",
+    "vendor": "NVIDIA",
+    "memoryGB": 80,
+    "fp16TFLOPS": 312,
+    "powerW": 400,
+    "migSlices": [1, 2, 3, 4, 7],
+    "interconnect": "NVLink 600GB/s + InfiniBand HDR",
+    "pricePerHr": 2.1
+  },
+  {
+    "model": "A100-40GB",
+    "vendor": "NVIDIA",
+    "memoryGB": 40,
+    "fp16TFLOPS": 312,
+    "powerW": 400,
+    "migSlices": [1, 2, 3, 4, 7],
+    "interconnect": "NVLink 600GB/s",
+    "pricePerHr": 1.6
+  },
+  {
+    "model": "L40S",
+    "vendor": "NVIDIA",
+    "memoryGB": 48,
+    "fp16TFLOPS": 362,
+    "powerW": 350,
+    "migSlices": [1, 2, 4],
+    "interconnect": "PCIe Gen4 + NVLink bridge",
+    "pricePerHr": 1.4
+  },
+  {
+    "model": "A6000",
+    "vendor": "NVIDIA",
+    "memoryGB": 48,
+    "fp16TFLOPS": 309,
+    "powerW": 300,
+    "migSlices": [],
+    "interconnect": "PCIe Gen4 + NVLink",
+    "pricePerHr": 1.1
+  },
+  {
+    "model": "RTX4090",
+    "vendor": "NVIDIA",
+    "memoryGB": 24,
+    "fp16TFLOPS": 330,
+    "powerW": 450,
+    "migSlices": [],
+    "interconnect": "PCIe Gen4",
+    "pricePerHr": 0.85
+  },
+  {
+    "model": "V100",
+    "vendor": "NVIDIA",
+    "memoryGB": 32,
+    "fp16TFLOPS": 125,
+    "powerW": 300,
+    "migSlices": [],
+    "interconnect": "NVLink 300GB/s",
+    "pricePerHr": 0.9
+  }
+]

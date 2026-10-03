@@ -1,0 +1,7 @@
+[
+  { "id": "rule-thermal", "name": "GPU thermal breach", "metric": "temp", "threshold": 83, "scope": "fleet", "severity": "warn", "enabled": true, "cooldownSec": 120 },
+  { "id": "rule-hotspot", "name": "Sustained SM saturation", "metric": "util", "threshold": 95, "scope": "vulcan-infer", "severity": "warn", "enabled": true, "cooldownSec": 180 },
+  { "id": "rule-power", "name": "GPU over power draw", "metric": "power", "threshold": 650, "scope": "helios-prod", "severity": "error", "enabled": true, "cooldownSec": 180 },
+  { "id": "rule-ecc", "name": "ECC errors detected", "metric": "ecc", "threshold": 1, "scope": "fleet", "severity": "error", "enabled": false, "cooldownSec": 300 },
+  { "id": "rule-queue", "name": "Slurm backlog growing", "metric": "queue", "threshold": 3, "scope": "atlas-train", "severity": "warn", "enabled": true, "cooldownSec": 240 }
+]

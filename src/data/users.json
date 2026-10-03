@@ -1,0 +1,10 @@
+[
+  { "id": "u-ava", "name": "Ava Chen", "email": "ava@helios.ai", "team": "frontier-train", "role": "admin", "quotaGPUs": 64, "usedGPUs": 48, "quotaCpuCores": 512, "usedCpuCores": 384, "quotaMemGB": 4096, "usedMemGB": 2816, "priority": 100, "activeJobs": 5 },
+  { "id": "u-marcus", "name": "Marcus Webb", "email": "marcus@helios.ai", "team": "frontier-train", "role": "researcher", "quotaGPUs": 32, "usedGPUs": 24, "quotaCpuCores": 256, "usedCpuCores": 176, "quotaMemGB": 2048, "usedMemGB": 1344, "priority": 80, "activeJobs": 3 },
+  { "id": "u-priya", "name": "Priya Nair", "email": "priya@helios.ai", "team": "serve-llm", "role": "engineer", "quotaGPUs": 24, "usedGPUs": 16, "quotaCpuCores": 192, "usedCpuCores": 128, "quotaMemGB": 1536, "usedMemGB": 896, "priority": 75, "activeJobs": 4 },
+  { "id": "u-diego", "name": "Diego Santos", "email": "diego@helios.ai", "team": "serve-llm", "role": "engineer", "quotaGPUs": 16, "usedGPUs": 12, "quotaCpuCores": 128, "usedCpuCores": 96, "quotaMemGB": 1024, "usedMemGB": 640, "priority": 70, "activeJobs": 2 },
+  { "id": "u-lena", "name": "Lena Fischer", "email": "lena@helios.ai", "team": "vision", "role": "researcher", "quotaGPUs": 16, "usedGPUs": 8, "quotaCpuCores": 128, "usedCpuCores": 64, "quotaMemGB": 1024, "usedMemGB": 512, "priority": 60, "activeJobs": 2 },
+  { "id": "u-kenji", "name": "Kenji Tanaka", "email": "kenji@helios.ai", "team": "vision", "role": "researcher", "quotaGPUs": 12, "usedGPUs": 4, "quotaCpuCores": 96, "usedCpuCores": 32, "quotaMemGB": 768, "usedMemGB": 256, "priority": 55, "activeJobs": 1 },
+  { "id": "u-zara", "name": "Zara Ahmed", "email": "zara@helios.ai", "team": "platform", "role": "admin", "quotaGPUs": 32, "usedGPUs": 6, "quotaCpuCores": 256, "usedCpuCores": 48, "quotaMemGB": 2048, "usedMemGB": 384, "priority": 90, "activeJobs": 1 },
+  { "id": "u-tom", "name": "Tom Becker", "email": "tom@helios.ai", "team": "interns", "role": "viewer", "quotaGPUs": 4, "usedGPUs": 1, "quotaCpuCores": 32, "usedCpuCores": 8, "quotaMemGB": 256, "usedMemGB": 64, "priority": 20, "activeJobs": 1 }
+]
