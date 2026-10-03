@@ -26,6 +26,7 @@ const MOBILE_NAV = [
   { href: "/users", label: "Users" },
   { href: "/billing", label: "Billing" },
   { href: "/monitoring", label: "Monitor" },
+  { href: "/topology", label: "Topo" },
   { href: "/alerts", label: "Alerts" },
   { href: "/diagnostics", label: "Diag" }
 ];

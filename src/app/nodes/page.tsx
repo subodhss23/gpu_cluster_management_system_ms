@@ -1,7 +1,8 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Search, Zap, Thermometer, Ban, Play, Split, Settings2, Tag } from "lucide-react";
+import { Search, Zap, Thermometer, Ban, Play, Split, Settings2, Tag, RefreshCw } from "lucide-react";
 import { useFleet } from "@/lib/store";
+import { PXE_STAGES } from "@/lib/sim";
 import type { SimNode } from "@/lib/types";
 import { fmtNum } from "@/lib/utils";
 import { Card, SectionTitle, Badge, Bar } from "@/components/cards";
@@ -10,7 +11,7 @@ import { GpuHeatmap } from "@/components/charts";
 const MIG_CAPABLE = ["H100", "H200", "A100-80GB", "A100-40GB", "L40S"];
 
 export default function NodesPage() {
-  const { nodes, gpus, clusters, setGpuPowerLimit, setMig, drainNode, undrainNode } = useFleet();
+  const { nodes, gpus, clusters, setGpuPowerLimit, setMig, drainNode, undrainNode, reimageNode } = useFleet();
   const [q, setQ] = useState("");
   const [clusterF, setClusterF] = useState("all");
   const [statusF, setStatusF] = useState("all");
@@ -64,6 +65,31 @@ export default function NodesPage() {
         </div>
       </Card>
 
+      {nodes.some((n) => n.status === "provisioning") && (
+        <Card className="border-cyanx/30">
+          <SectionTitle title="PXE provisioning pipeline" hint="discovery → dhcp → ipxe → imaging → burn-in → ready · advances every tick" />
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {nodes.filter((n) => n.status === "provisioning").map((n) => (
+              <div key={n.id} className="rounded-xl border border-line bg-black/30 p-3">
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin text-cyanx" />
+                  <span className="flex-1 truncate font-mono text-xs font-semibold text-white">{n.hostname}</span>
+                  <span className="font-mono text-[11px] text-cyanx">{(n.pxeProgress ?? 0).toFixed(0)}%</span>
+                </div>
+                <div className="mt-2 flex gap-1">
+                  {PXE_STAGES.map((s) => {
+                    const cur = n.pxeStage ?? "discovery";
+                    const done = PXE_STAGES.indexOf(s as (typeof PXE_STAGES)[number]) <= PXE_STAGES.indexOf(cur as (typeof PXE_STAGES)[number]);
+                    return <span key={s} title={s} className={`h-1.5 flex-1 rounded-full ${done ? "bg-cyanx" : "bg-zinc-800"}`} />;
+                  })}
+                </div>
+                <div className="mt-1.5 font-mono text-[10px] text-zinc-500">stage: {n.pxeStage ?? "discovery"} · {n.clusterId} · {n.gpuIds.length} GPUs waiting</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <div className="grid gap-4 xl:grid-cols-3">
         <div className="space-y-3 xl:col-span-2">
           {filteredNodes.map((n) => (
@@ -73,6 +99,7 @@ export default function NodesPage() {
                 <Badge status={n.status}>{n.status}</Badge>
                 <span className="font-mono text-[11px] text-zinc-500">{n.clusterId} · {n.role} · {n.cpuModel}</span>
                 <div className="ml-auto flex gap-1.5">
+                  <button onClick={() => reimageNode(n.id)} className="flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-[11px] text-zinc-400 hover:border-cyanx/60 hover:text-cyanx" title="Reimage via PXE from discovery"><RefreshCw className="h-3 w-3" />reimage</button>
                   {n.status === "drain"
                     ? <button onClick={() => undrainNode(n.id)} className="flex items-center gap-1 rounded-lg border border-nv/40 px-2 py-1 text-[11px] text-nv"><Play className="h-3 w-3" />undrain</button>
                     : <button onClick={() => drainNode(n.id)} className="flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-[11px] text-zinc-400 hover:border-amberx/60 hover:text-amberx"><Ban className="h-3 w-3" />drain</button>}

@@ -139,9 +139,7 @@ instructions.md     install · deploy · tour · troubleshooting
 - [x] FinOps billing · checkpoints · autoscale policies · alert rules · MIG manager
 - [x] Deep config: cluster editor · partitions/QOS · node config · policy console · blueprints
 - [x] Real lifecycle: capacity scheduler loop · walltime completion · sim-speed clock · live quotas · GPU pinning
-- [ ] Virtualized 100k-node table + InfiniBand topology map
-- [ ] Spot/preempt pools + canary deploys
-- [ ] PXE provisioning state machine per node
+- [x] Web scale: 100k virtualized topology + IB map · spot pools + preemption · canaries · PXE pipeline
 - [ ] Vitest suite (sim determinism, tick bounds, quota math) + Playwright smoke tests
 
 Ideas? Open an issue with the **shortest version** of your idea. Bonus points for sketching which JSON seed it would live in.

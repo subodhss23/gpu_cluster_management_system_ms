@@ -2,9 +2,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Cpu, Zap, Thermometer, Gauge, Settings2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Cpu, Zap, Thermometer, Gauge, Settings2, Plus, Trash2, ZapOff } from "lucide-react";
 import { useFleet } from "@/lib/store";
-import type { PartitionCfg } from "@/lib/types";
+import type { PartitionCfg, SimJob } from "@/lib/types";
+import { effPriorityOf } from "@/lib/sim";
 import { fmtNum, timeAgo } from "@/lib/utils";
 import { Card, SectionTitle, Badge, Bar } from "@/components/cards";
 import { FleetArea, GpuHeatmap } from "@/components/charts";
@@ -12,8 +13,9 @@ import ClusterEditor from "@/components/ClusterEditor";
 
 export default function ClusterDetail() {
   const params = useParams<{ id: string }>();
-  const { clusters, nodes, gpus, jobs, partitions, addPartition, updatePartition, removePartition, clusterHistory, tick, activity } = useFleet();
+  const { clusters, nodes, gpus, jobs, partitions, addPartition, updatePartition, removePartition, clusterHistory, tick, activity, preemptJobs } = useFleet();
   const [editing, setEditing] = useState(false);
+  const [reclaimN, setReclaimN] = useState(2);
   const [showPartForm, setShowPartForm] = useState(false);
   const [partDraft, setPartDraft] = useState({ name: "ml-batch", kind: "slurm" as PartitionCfg["kind"], nodeCount: 4, maxGpusPerJob: 16, maxTimeHrs: 72, priority: 50, qos: "normal", allowAccounts: "*" });
   const cluster = clusters.find((c) => c.id === params.id);
@@ -68,6 +70,15 @@ export default function ClusterDetail() {
         setShowForm={setShowPartForm}
         draft={partDraft}
         setDraft={setPartDraft}
+      />
+
+      <SpotPoolCard
+        clusterId={cluster.id}
+        totalGPUs={cluster.totalGPUs}
+        running={cjobs.filter((j) => j.status === "running")}
+        reclaimN={reclaimN}
+        setReclaimN={setReclaimN}
+        onReclaim={(n) => preemptJobs(cluster.id, n)}
       />
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -161,6 +172,50 @@ interface PartProps {
   setShowForm: (v: boolean) => void;
   draft: { name: string; kind: PartitionCfg["kind"]; nodeCount: number; maxGpusPerJob: number; maxTimeHrs: number; priority: number; qos: string; allowAccounts: string };
   setDraft: (d: PartProps["draft"]) => void;
+}
+
+function SpotPoolCard({ clusterId, totalGPUs, running, reclaimN, setReclaimN, onReclaim }: {
+  clusterId: string; totalGPUs: number; running: SimJob[];
+  reclaimN: number; setReclaimN: (n: number) => void; onReclaim: (n: number) => void;
+}) {
+  const { users, schedPolicy } = useFleet();
+  const spotCap = Math.max(4, Math.round(totalGPUs * 0.2));
+  const spotRunning = running.filter((j) => j.preemptible);
+  const ordered = [...running].sort((a, b) => effPriorityOf(a, users, schedPolicy.teamWeight) - effPriorityOf(b, users, schedPolicy.teamWeight));
+  const victims = ordered.slice(0, Math.max(0, reclaimN));
+  return (
+    <Card className="border-amberx/30">
+      <SectionTitle
+        title="Spot pool — preemptible capacity"
+        hint={`${spotCap} GPUs (~20%) at 70% off on-demand · reclaim evicts lowest effective priority first`}
+        right={<span className="rounded-full border border-amberx/50 bg-amberx/10 px-2.5 py-0.5 font-mono text-[11px] text-amberx">{spotRunning.length} spot jobs running</span>}
+      />
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-line bg-black/30 p-3">
+          <div className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">Spot capacity</div>
+          <div className="mt-1 font-mono text-lg font-bold text-white">{spotCap} <span className="text-xs font-normal text-zinc-500">GPUs · $0.30 on $1</span></div>
+          <div className="mt-2"><Bar value={(spotCap / Math.max(1, totalGPUs)) * 100} color="bg-amberx" /></div>
+        </div>
+        <div className="rounded-xl border border-line bg-black/30 p-3">
+          <div className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">Reclaim order (lowest pri first)</div>
+          <div className="mt-1 space-y-1">
+            {ordered.slice(0, 3).map((j) => (
+              <div key={j.id} className="flex justify-between font-mono text-[11px]"><span className="truncate text-zinc-300">{j.name}</span><span className="text-amberx">{effPriorityOf(j, users, schedPolicy.teamWeight)}</span></div>
+            ))}
+            {ordered.length === 0 && <div className="text-[11px] text-zinc-500">nothing running — nothing to reclaim</div>}
+          </div>
+        </div>
+        <div className="rounded-xl border border-line bg-black/30 p-3">
+          <div className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">Simulate spot reclaim</div>
+          <div className="mt-2 flex items-center gap-2">
+            <input type="number" min={1} max={Math.max(1, running.length)} value={reclaimN} onChange={(e) => setReclaimN(Number(e.target.value))} className="w-16 rounded-lg border border-line bg-black/40 px-2 py-1.5 font-mono text-sm text-white" />
+            <button onClick={() => onReclaim(reclaimN)} disabled={!running.length} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-amberx/50 bg-amberx/10 px-3 py-1.5 text-xs font-semibold text-amberx hover:bg-amberx hover:text-black disabled:opacity-40"><ZapOff className="h-3.5 w-3.5" /> Reclaim {reclaimN}</button>
+          </div>
+          {victims.length > 0 && <div className="mt-1.5 font-mono text-[10px] text-zinc-500">would evict: {victims.map((v) => v.name).join(", ")}</div>}
+        </div>
+      </div>
+    </Card>
+  );
 }
 
 function PartitionsSection(props: PartProps) {

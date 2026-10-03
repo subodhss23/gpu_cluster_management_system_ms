@@ -1,7 +1,7 @@
 # PRD — Helios GPU Management System (Simulator)
 
-**Version:** 0.4.0 · **Date:** 2026-10-02 · **Owner:** Helios Platform Team
-**Status:** Phases 1–3 built, plus waves 2 (FinOps/serving/alerts), 3 (deep config), 4 (real scheduler lifecycle). Remaining roadmap at the bottom.
+**Version:** 0.5.0 · **Date:** 2026-10-02 · **Owner:** Helios Platform Team
+**Status:** Phases 1–3 built, plus waves 2 (FinOps/serving/alerts), 3 (deep config), 4 (real scheduler lifecycle), 5 (100k topology, spot/canary, PXE). Remaining roadmap at the bottom.
 
 ## 1. Problem
 Teams running LLM training + inference juggle five different tools: BCM-style provisioning,
@@ -40,14 +40,14 @@ failure drills need a **safe, visual, zero-hardware simulator** that still feels
 ### Phase 2 — Single-cluster deep dive ✅ BUILT
 - Cluster detail (`/clusters/[id]`): nodes sampled, hottest GPUs, jobs on cluster, power-cap bar, **partitions/QOS editor**, **Configure modal** (rename, mix, caps, stack).
 - Nodes & GPUs inventory (`/nodes`): search/filter, heatmap → GPU inspector (util/mem/temp/power/clocks/MIG/ECC/throttle), per-GPU power caps, **MIG slice manager**, node drain/undrain, **Configure tab** (labels, taints, GRES, power cap, job slots).
-- **Remaining (Phase 2b):** full node table virtualization (100k-node scale), per-node PXE state machine, IB topology map.
+- **Remaining (Phase 2b):** full node table virtualization at 1M+ rows, per-rack power/cooling overlays.
 
 ### Phase 3 — Full AI Factory + serving ✅ BUILT
 - Workloads queue (`/workloads`): Slurm + K8s unified table, progress bars, logs viewer, **checkpoints browser with resume**, cancel/requeue, pinned-placement readout.
 - Launch wizard (`/scheduler`): user/app → cluster **+ partition** → GPU/CPU/MEM/NET/storage sliders (policy-clamped) + fractional (1 / 0.5 / 0.25) + walltime, quota check, queue-position estimate, sbatch/kubectl preview. Submissions queue; the **scheduler loop starts them on free capacity**.
 - AI Serving (`/serving`): GPUStack endpoints (vLLM, SGLang, TensorRT-LLM) with RPS/p99/tok-s, replica/load bars, **autoscale policies enforced live**, deploy wizard, routing topology strip.
 - Users & quotas (`/users`, live accounting), FinOps (`/billing`: metered spend, budgets, chargeback CSV), Monitoring (`/monitoring`), Alerts (`/alerts`: 5-metric rules engine), Diagnostics (`/diagnostics`), Policies (`/policies`: limits, engines, team weights, queue preview), Blueprints (`/blueprints`: templates + JSON import/export).
-- **Remaining (Phase 3b):** spot/preempt simulation, canary deploys.
+- **Remaining (Phase 3b):** canary auto-promotion on SLOs, spot price history charts.
 
 ## 6. Functional requirements (acceptance — all passing)
 - [x] User can view 480 GPUs / 65 nodes / 3 regions from one dashboard.

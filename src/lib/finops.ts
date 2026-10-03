@@ -16,18 +16,23 @@ export function clusterGpuPrice(cluster: Cluster): number {
   return entries.reduce((a, [m, n]) => a + pricePerHr(m) * ((n as number) / total), 0);
 }
 
+/** Spot discount: preemptible jobs bill 30% of on-demand. */
+export const SPOT_MULT = 0.3;
+
 /** Burned spend so far: seeded accrual + live running projection. */
 export function jobSpend(j: SimJob, price: number): number {
   if (j.status === "queued" || j.status === "cancelled") return j.costAccrued;
   const slice = j.fractional && j.fractional < 1 ? j.fractional : 1;
-  return j.costAccrued + j.elapsedHrs * j.gpusRequested * slice * price;
+  const rate = j.preemptible ? price * SPOT_MULT : price;
+  return j.costAccrued + j.elapsedHrs * j.gpusRequested * slice * rate;
 }
 
 /** Projected total if the job runs to walltime. */
 export function jobProjected(j: SimJob, price: number): number {
   const slice = j.fractional && j.fractional < 1 ? j.fractional : 1;
+  const rate = j.preemptible ? price * SPOT_MULT : price;
   const remaining = Math.max(0, j.walltimeHrs - j.elapsedHrs);
-  return jobSpend(j, price) + (j.status === "running" ? remaining * j.gpusRequested * slice * price : 0);
+  return jobSpend(j, price) + (j.status === "running" ? remaining * j.gpusRequested * slice * rate : 0);
 }
 
 export function money(n: number): string {

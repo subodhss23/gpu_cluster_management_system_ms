@@ -1,8 +1,8 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { ActivityEvent, AlertRule, AutoscalePolicy, Blueprint, Cluster, FiredAlert, PartitionCfg, SchedPolicy, ServeEndpoint, SimGpu, SimJob, SimNode, SimUser, TelemetryPoint } from "./types";
-import { allocateGpus, defaultPartitions, generateFleet, releaseJobGpus, seededRand, seedHistory, snapshotTelemetry, tickGpu, clustersSeedTyped, DEFAULT_SCHED_POLICY, type FleetSeed } from "./sim";
+import type { ActivityEvent, AlertRule, AutoscalePolicy, Blueprint, CanaryRelease, Cluster, FiredAlert, PartitionCfg, SchedPolicy, ServeEndpoint, SimGpu, SimJob, SimNode, SimUser, TelemetryPoint } from "./types";
+import { allocateGpus, defaultPartitions, effPriorityOf, generateFleet, pxeStageFor, releaseJobGpus, seededRand, seedHistory, snapshotTelemetry, tickGpu, clustersSeedTyped, DEFAULT_SCHED_POLICY, type FleetSeed } from "./sim";
 import { track } from "./analytics";
 import clustersSeed from "@/data/clusters.json";
 import usersSeed from "@/data/users.json";
@@ -39,6 +39,8 @@ interface FleetState {
   launchJob: (j: SimJob) => void;
   cancelJob: (id: string) => void;
   retryJob: (id: string) => void;
+  preemptJobs: (clusterId: string, count: number) => void;
+  reimageNode: (nodeId: string) => void;
   setGpuPowerLimit: (gpuId: string, watts: number) => void;
   setMig: (gpuId: string, enabled: boolean, usedSlices: number) => void;
   drainNode: (nodeId: string) => void;
@@ -47,6 +49,10 @@ interface FleetState {
   removeEndpoint: (id: string) => void;
   scaleEndpoint: (id: string, delta: number) => void;
   updatePolicy: (id: string, policy: AutoscalePolicy) => void;
+  startCanary: (id: string, version: string, trafficPct: number) => void;
+  setCanaryTraffic: (id: string, trafficPct: number) => void;
+  promoteCanary: (id: string) => void;
+  rollbackCanary: (id: string) => void;
   addRule: (r: AlertRule) => void;
   removeRule: (id: string) => void;
   toggleRule: (id: string) => void;
@@ -141,6 +147,7 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
   const usersRef = useRef<SimUser[]>(users);
   const schedPolicyRef = useRef<SchedPolicy>(schedPolicy);
   const simSpeedRef = useRef<number>(simSpeed);
+  const nodesRef = useRef<SimNode[]>(fleet.nodes);
   useEffect(() => { gpusRef.current = fleet.gpus; }, [fleet.gpus]);
   useEffect(() => { endpointsRef.current = endpoints; }, [endpoints]);
   useEffect(() => { jobsRef.current = jobs; }, [jobs]);
@@ -149,6 +156,7 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { usersRef.current = users; }, [users]);
   useEffect(() => { schedPolicyRef.current = schedPolicy; }, [schedPolicy]);
   useEffect(() => { simSpeedRef.current = simSpeed; }, [simSpeed]);
+  useEffect(() => { nodesRef.current = fleet.nodes; }, [fleet.nodes]);
 
   // restore user-created clusters/jobs/endpoints/rules from localStorage
   useEffect(() => {
@@ -201,10 +209,7 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
         .map((j) => ({ ...j, status: "completed" as const, progress: 100, elapsedHrs: j.walltimeHrs }));
 
       // — scheduler loop: start queued jobs by effective priority while GPUs free —
-      const effOf = (j: SimJob) => {
-        const u = us.find((x) => x.name === j.user);
-        return (u?.priority ?? 50) * (pol.teamWeight[j.team] ?? 1);
-      };
+      const effOf = (j: SimJob) => effPriorityOf(j, us, pol.teamWeight);
       const freeFor = (clusterId: string, extraRunning: SimJob[]) => {
         const total = cs.find((c) => c.id === clusterId)?.totalGPUs ?? 0;
         const used = snap
@@ -235,7 +240,25 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
         pinIds[s.id] = r.ids;
       }
       const ticked = gpus.map((g) => tickGpu(g, rand));
-      setFleet((f) => ({ ...f, gpus: ticked }));
+
+      // — PXE pipeline: advance provisioning nodes toward ready —
+      const pxeDone: string[] = [];
+      const nextNodes = nodesRef.current.map((n) => {
+        if (n.status !== "provisioning") return n;
+        const prog = Math.min(100, (n.pxeProgress ?? 50) + 6 + rand() * 14);
+        if (prog >= 100) {
+          pxeDone.push(n.hostname);
+          return { ...n, status: "idle" as const, pxeStage: "ready", pxeProgress: 100 };
+        }
+        return { ...n, pxeProgress: Math.round(prog), pxeStage: pxeStageFor(prog) };
+      });
+      setFleet({ nodes: nextNodes, gpus: ticked });
+      if (pxeDone.length) {
+        setActivity((a) => [
+          ...pxeDone.map((h) => ({ id: `ev-${now}-pxe-${h}`, ts: new Date().toISOString(), type: "node" as const, severity: "success" as const, actor: "provisioner", message: `${h} finished provisioning (burn-in passed) — ready for scheduling` })),
+          ...a
+        ].slice(0, 120));
+      }
       setTick((t) => t + 1);
       setSimHours((h) => h + simH);
 
@@ -507,6 +530,35 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const reimageNode = useCallback((nodeId: string) => {
+    setFleet((f) => ({ ...f, nodes: f.nodes.map((n) => (n.id === nodeId ? { ...n, status: "provisioning" as const, pxeStage: "discovery", pxeProgress: 0 } : n)) }));
+    pushActivity({ type: "node", severity: "warn", actor: "operator", message: `${nodeId} reimage started — PXE pipeline from discovery` });
+    track("node_reimaged", { node: nodeId });
+  }, [pushActivity]);
+
+  /** Spot reclaim: lowest effective-priority running jobs go back to queued (quota stays reserved). */
+  const preemptJobs = useCallback((clusterId: string, count: number) => {
+    const js = jobsRef.current;
+    const us = usersRef.current;
+    const pol = schedPolicyRef.current;
+    const victims = js
+      .filter((j) => j.clusterId === clusterId && j.status === "running")
+      .sort((a, b) => effPriorityOf(a, us, pol.teamWeight) - effPriorityOf(b, us, pol.teamWeight))
+      .slice(0, Math.max(0, count));
+    if (!victims.length) return;
+    const ids = new Set(victims.map((v) => v.id));
+    setJobs((prev) => prev.map((j) => (ids.has(j.id)
+      ? { ...j, status: "queued" as const, startedAt: null, gpuIds: [], logs: `PREEMPTED by spot reclaim on ${clusterId} — checkpoint kept, requeued (eff-pri ${effPriorityOf(j, usersRef.current, schedPolicyRef.current.teamWeight)})` }
+      : j)));
+    setFleet((f) => {
+      let gpus = f.gpus;
+      for (const v of victims) gpus = releaseJobGpus(gpus, v.id);
+      return { ...f, gpus };
+    });
+    pushActivity({ type: "job", severity: "warn", actor: "spot-reclaimer", message: `spot reclaim on ${clusterId}: preempted ${victims.length} job(s) (${victims.map((v) => v.name).join(", ")})`, clusterId });
+    track("spot_reclaim", { cluster: clusterId, count: victims.length });
+  }, [pushActivity]);
+
   const setGpuPowerLimit = useCallback((gpuId: string, watts: number) => {
     setFleet((f) => ({ ...f, gpus: f.gpus.map((g) => (g.id === gpuId ? { ...g, powerLimitW: watts } : g)) }));
     track("power_cap_applied", { watts });
@@ -563,6 +615,36 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
     setEndpoints((es) => es.map((e) => (e.id === id ? { ...e, policy } : e)));
     pushActivity({ type: "job", severity: "info", actor: "operator", message: `autoscale policy updated on ${id} (min ${policy.minReplicas}, max ${policy.maxReplicas}, target ${policy.targetRps} rps)` });
     track("autoscale_policy_updated", { endpoint: id });
+  }, [pushActivity]);
+
+  const startCanary = useCallback((id: string, version: string, trafficPct: number) => {
+    setEndpoints((es) => es.map((e) => (e.id === id
+      ? { ...e, status: "scaling" as const, canary: { version, replicas: 1, trafficPct: Math.max(0, Math.min(100, trafficPct)) } as CanaryRelease }
+      : e)));
+    pushActivity({ type: "job", severity: "info", actor: "operator", message: `canary ${version} started on ${id} at ${trafficPct}% traffic (1 replica)` });
+    track("canary_started", { endpoint: id, traffic: trafficPct });
+  }, [pushActivity]);
+
+  const setCanaryTraffic = useCallback((id: string, trafficPct: number) => {
+    setEndpoints((es) => es.map((e) => (e.id === id && e.canary
+      ? { ...e, canary: { ...e.canary, trafficPct: Math.max(0, Math.min(100, trafficPct)) } }
+      : e)));
+  }, []);
+
+  const promoteCanary = useCallback((id: string) => {
+    const e = endpointsRef.current.find((x) => x.id === id);
+    if (!e?.canary) return;
+    setEndpoints((es) => es.map((x) => (x.id === id ? { ...x, version: (x.canary as CanaryRelease).version, canary: undefined, status: "serving" as const } : x)));
+    pushActivity({ type: "job", severity: "success", actor: "operator", message: `canary ${e.canary.version} PROMOTED to stable on ${id}` });
+    track("canary_promoted", { endpoint: id });
+  }, [pushActivity]);
+
+  const rollbackCanary = useCallback((id: string) => {
+    const e = endpointsRef.current.find((x) => x.id === id);
+    if (!e?.canary) return;
+    setEndpoints((es) => es.map((x) => (x.id === id ? { ...x, canary: undefined, status: "serving" as const } : x)));
+    pushActivity({ type: "job", severity: "warn", actor: "operator", message: `canary ${e.canary.version} ROLLED BACK on ${id} — stable ${e.version} kept` });
+    track("canary_rolled_back", { endpoint: id });
   }, [pushActivity]);
 
   const addRule = useCallback((r: AlertRule) => {
@@ -633,13 +715,13 @@ export function FleetProvider({ children }: { children: React.ReactNode }) {
     () => ({
       clusters, nodes: fleet.nodes, gpus: fleet.gpus, users, jobs, endpoints, activity, rules, fired,
       partitions, schedPolicy, blueprints, history, clusterHistory,
-      live, tick, toggleLive, simSpeed, simHours, setSimSpeed, addCluster, updateCluster, removeCluster, updateNode, launchJob, cancelJob, retryJob,
+      live, tick, toggleLive, simSpeed, simHours, setSimSpeed, addCluster, updateCluster, removeCluster, updateNode, launchJob, cancelJob, retryJob, preemptJobs, reimageNode,
       setGpuPowerLimit, setMig, drainNode, undrainNode, addEndpoint, removeEndpoint,
-      scaleEndpoint, updatePolicy, addRule, removeRule, toggleRule, ackFired,
+      scaleEndpoint, updatePolicy, startCanary, setCanaryTraffic, promoteCanary, rollbackCanary, addRule, removeRule, toggleRule, ackFired,
       addPartition, updatePartition, removePartition, updateSchedPolicy,
       saveBlueprint, addBlueprint, removeBlueprint, instantiateBlueprint, resetDemo, pushActivity
     }),
-    [clusters, fleet, users, jobs, endpoints, activity, rules, fired, partitions, schedPolicy, blueprints, history, clusterHistory, live, tick, toggleLive, simSpeed, simHours, setSimSpeed, addCluster, updateCluster, removeCluster, updateNode, launchJob, cancelJob, retryJob, setGpuPowerLimit, setMig, drainNode, undrainNode, addEndpoint, removeEndpoint, scaleEndpoint, updatePolicy, addRule, removeRule, toggleRule, ackFired, addPartition, updatePartition, removePartition, updateSchedPolicy, saveBlueprint, addBlueprint, removeBlueprint, instantiateBlueprint, resetDemo, pushActivity]
+    [clusters, fleet, users, jobs, endpoints, activity, rules, fired, partitions, schedPolicy, blueprints, history, clusterHistory, live, tick, toggleLive, simSpeed, simHours, setSimSpeed, addCluster, updateCluster, removeCluster, updateNode, launchJob, cancelJob, retryJob, preemptJobs, reimageNode, setGpuPowerLimit, setMig, drainNode, undrainNode, addEndpoint, removeEndpoint, scaleEndpoint, updatePolicy, startCanary, setCanaryTraffic, promoteCanary, rollbackCanary, addRule, removeRule, toggleRule, ackFired, addPartition, updatePartition, removePartition, updateSchedPolicy, saveBlueprint, addBlueprint, removeBlueprint, instantiateBlueprint, resetDemo, pushActivity]
   );
 
   return <FleetCtx.Provider value={value}>{children}</FleetCtx.Provider>;

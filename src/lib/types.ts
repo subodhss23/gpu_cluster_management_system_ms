@@ -55,6 +55,8 @@ export interface SimNode {
   features: string; // Slurm Features= / GRES string
   nodePowerCapW: number;
   maxJobs: number;
+  pxeStage?: string; // provisioning pipeline stage (undefined once ready)
+  pxeProgress?: number; // 0-100 within the pipeline
 }
 
 export interface SimGpu {
@@ -125,6 +127,7 @@ export interface SimJob {
   logs?: string;
   framework: string;
   partition?: string;
+  preemptible?: boolean; // spot job: 70% cheaper, reclaimable
 }
 
 export interface AutoscalePolicy {
@@ -148,6 +151,13 @@ export interface ServeEndpoint {
   status: "serving" | "scaling" | "down";
   version: string;
   policy?: AutoscalePolicy;
+  canary?: CanaryRelease;
+}
+
+export interface CanaryRelease {
+  version: string;
+  replicas: number;
+  trafficPct: number;
 }
 
 export interface ActivityEvent {

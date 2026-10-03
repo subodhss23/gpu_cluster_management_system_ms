@@ -42,8 +42,10 @@ vercel --prod     # production deploy
 7. **Lifecycle:** set speed to **3.6k×**, wait ~30s — jobs complete, GPUs release, timeline records it.
 8. **Policies `/policies`:** drag a team weight, toggle preemption → revisit `/scheduler` to see limits/verdict change.
 9. **Blueprints `/blueprints`:** snapshot `helios-prod` → Launch as `helios-clone` → check `/clusters`.
-10. **Serving/Billing/Alerts/Monitoring/Diagnostics:** scale an endpoint ±, check team burn + CSV export, lower a thermal threshold and watch it fire, filter timeline to `error`, ask the agent “Why did job-7010 fail?”, run DCGM diagnostics.
+10. **Serving/Billing/Alerts/Monitoring/Diagnostics:** scale an endpoint ±, start a canary at 10% then promote it, check team burn + CSV export, lower a thermal threshold and watch it fire, filter timeline to `error`, ask the agent “Why did job-7010 fail?”, run DCGM diagnostics.
 11. **Topbar:** theme toggle → Export JSON (fleet snapshot) → Reset (restores seeds).
+12. **Topology `/topology`:** scroll the 100k table (only ~35 rows in DOM), search `helios-prod-r03`, click a fabric pod to filter by region.
+13. **Spot + PXE:** on a cluster detail, **Reclaim 2** in the spot pool (lowest-priority jobs preempt to queued); launch a spot job from `/scheduler` and watch the 0.3× cost; on `/nodes`, hit **reimage** on a node and watch it walk discovery → ready.
 
 ## 6. Edit the synthetic data
 All files in `src/data/` are plain JSON — edit and refresh:

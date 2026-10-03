@@ -76,8 +76,10 @@ export default function ServingPage() {
 }
 
 function EndpointCard({ e, policyFor, setPolicyFor }: { e: ServeEndpoint; policyFor: string | null; setPolicyFor: (id: string | null) => void }) {
-  const { scaleEndpoint, removeEndpoint, updatePolicy } = useFleet();
+  const { scaleEndpoint, removeEndpoint, updatePolicy, startCanary, setCanaryTraffic, promoteCanary, rollbackCanary } = useFleet();
   const p = e.policy;
+  const [canaryVer, setCanaryVer] = useState("");
+  const [canaryPct, setCanaryPct] = useState(10);
     const perReplica = p ? Math.round((e.rps / Math.max(1, e.replicas))) : 0;
     const editing = policyFor === e.id;
     const [draft, setDraft] = useState<AutoscalePolicy>(p ?? { enabled: true, minReplicas: 1, maxReplicas: 8, targetRps: 30, targetP99Ms: 900 });
@@ -120,6 +122,34 @@ function EndpointCard({ e, policyFor, setPolicyFor }: { e: ServeEndpoint; policy
             <button onClick={() => { updatePolicy(e.id, { ...draft, minReplicas: Math.min(draft.minReplicas, draft.maxReplicas) }); setPolicyFor(null); }} className="w-full rounded-lg bg-nv py-1.5 text-xs font-bold text-black">Save policy</button>
           </div>
         )}
+        <div className="mt-3 rounded-xl border border-cyanx/30 bg-cyanx/5 p-3">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="font-mono text-[11px] uppercase tracking-widest text-cyanx">Canary release</span>
+            {e.canary && <span className="rounded-full border border-cyanx/40 px-2 py-0.5 font-mono text-[10px] text-cyanx">{e.canary.trafficPct}% traffic</span>}
+          </div>
+          {!e.canary && (
+            <div className="flex gap-1.5">
+              <input value={canaryVer} onChange={(ev) => setCanaryVer(ev.target.value)} placeholder={`next version (stable ${e.version})`} className="min-w-0 flex-1 rounded-lg border border-line bg-black/40 px-2 py-1.5 font-mono text-[11px] text-white outline-none placeholder:text-zinc-600" />
+              <select value={canaryPct} onChange={(ev) => setCanaryPct(Number(ev.target.value))} className="rounded-lg border border-line bg-black/40 px-1.5 py-1.5 font-mono text-[11px] text-white">
+                {[5, 10, 25, 50].map((v) => <option key={v} value={v}>{v}%</option>)}
+              </select>
+              <button onClick={() => { if (canaryVer.trim()) { startCanary(e.id, canaryVer.trim(), canaryPct); setCanaryVer(""); } }} className="rounded-lg bg-cyanx px-3 py-1.5 text-[11px] font-bold text-black">Start</button>
+            </div>
+          )}
+          {e.canary && (
+            <div>
+              <div className="flex items-center justify-between font-mono text-[11px]">
+                <span className="text-white">{e.canary.version} <span className="text-zinc-500">vs stable {e.version}</span></span>
+                <span className="text-zinc-400">{e.canary.replicas} replica · {Math.round((e.rps * e.canary.trafficPct) / 100)} rps canary</span>
+              </div>
+              <input type="range" min={0} max={100} value={e.canary.trafficPct} onChange={(ev) => setCanaryTraffic(e.id, Number(ev.target.value))} className="mt-1.5 w-full accent-[#22D3EE]" />
+              <div className="mt-1.5 flex gap-1.5">
+                <button onClick={() => promoteCanary(e.id)} className="flex-1 rounded-lg bg-nv py-1.5 text-[11px] font-bold text-black">Promote to stable</button>
+                <button onClick={() => rollbackCanary(e.id)} className="flex-1 rounded-lg border border-rose/50 py-1.5 text-[11px] text-rose">Rollback</button>
+              </div>
+            </div>
+          )}
+        </div>
         <div className="mt-2 font-mono text-[10px] text-zinc-600">$ gastack deploy --engine {e.engine.toLowerCase()} --model {e.model} --replicas {e.replicas}</div>
       </Card>
     );

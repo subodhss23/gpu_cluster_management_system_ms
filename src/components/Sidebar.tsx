@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Boxes, Cpu, Layers, Rocket, ServerCog, Users, Activity, Stethoscope, Zap, DollarSign, BellRing, SlidersHorizontal, LayoutTemplate } from "lucide-react";
+import { LayoutDashboard, Boxes, Cpu, Layers, Rocket, ServerCog, Users, Activity, Stethoscope, Zap, DollarSign, BellRing, SlidersHorizontal, LayoutTemplate, Network } from "lucide-react";
 import { cx } from "@/lib/utils";
 
 const NAV = [
@@ -16,7 +16,7 @@ const NAV = [
   { href: "/users", label: "Users & Quotas", icon: Users },
   { href: "/billing", label: "Cost & Billing", icon: DollarSign },
   { href: "/monitoring", label: "Monitoring", icon: Activity },
-  { href: "/alerts", label: "Alerts", icon: BellRing },
+  { href: "/topology", label: "Topology 100k", icon: Network },  { href: "/alerts", label: "Alerts", icon: BellRing },
   { href: "/diagnostics", label: "Diagnostics", icon: Stethoscope }
 ];
 

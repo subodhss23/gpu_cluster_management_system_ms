@@ -1,4 +1,4 @@
-import type { Cluster, PartitionCfg, SchedPolicy, SimGpu, SimJob, SimNode, GpuModelId, TelemetryPoint } from "./types";
+import type { Cluster, PartitionCfg, SchedPolicy, SimGpu, SimJob, SimNode, SimUser, GpuModelId, TelemetryPoint } from "./types";
 import clustersSeed from "@/data/clusters.json";
 
 const MEM_BY_MODEL: Record<string, number> = {
@@ -148,12 +148,13 @@ export function generateFleet(clusters: Cluster[]): FleetSeed {
       }
 
       const isDrain = c.id === "helios-prod" && nodeId === "helios-prod-g14";
+      const isProv = c.status === "provisioning" && n >= shownGpuNodes - 2;
       nodes.push({
         id: nodeId,
         clusterId: c.id,
         hostname,
         role: "gpu-compute",
-        status: isDrain ? "drain" : c.status === "provisioning" && n >= shownGpuNodes - 2 ? "provisioning" : rand() > 0.12 ? "allocated" : "idle",
+        status: isDrain ? "drain" : isProv ? "provisioning" : rand() > 0.12 ? "allocated" : "idle",
         cpuModel: c.id === "edge-dev" ? "AMD Ryzen 7950X" : "Intel Xeon 8480+",
         cpuCores: 96,
         cpuUtil: Math.round((30 + rand() * 55) * 10) / 10,
@@ -169,7 +170,8 @@ export function generateFleet(clusters: Cluster[]): FleetSeed {
         taints: c.id === "edge-dev" ? ["spot=true:PreferNoSchedule"] : [`nvidia.com/gpu.present=true:NoSchedule`],
         features: `gpu,${modelForNode.toLowerCase().replace(/[^a-z0-9]+/g, "")},ib`,
         nodePowerCapW: Math.round(nodePower + 900),
-        maxJobs: 8
+        maxJobs: 8,
+        ...(isProv ? { pxeStage: "imaging", pxeProgress: Math.round(30 + rand() * 40) } : {})
       });
     }
   }
@@ -312,3 +314,76 @@ export const DEFAULT_SCHED_POLICY: SchedPolicy = {
   teamWeight: { "frontier-train": 1.5, "serve-llm": 1.2, vision: 1.0, platform: 1.3, interns: 0.4 },
   note: "fairshare + backfill; preemption off; interns preemptible"
 };
+
+/** Effective scheduling priority shared by the loop, previews, and preemption. */
+export function effPriorityOf(
+  j: Pick<SimJob, "user" | "team">,
+  users: Pick<SimUser, "name" | "priority">[],
+  teamWeight: Record<string, number>
+): number {
+  const u = users.find((x) => x.name === j.user);
+  return Math.round((u?.priority ?? 50) * (teamWeight[j.team] ?? 1));
+}
+
+/** PXE provisioning pipeline: discovery → dhcp → ipxe → imaging → burn-in → ready. */
+export const PXE_STAGES = ["discovery", "dhcp", "ipxe", "imaging", "burn-in", "ready"] as const;
+
+export function pxeStageFor(progress: number): string {
+  const idx = Math.min(PXE_STAGES.length - 1, Math.floor((progress / 100) * PXE_STAGES.length));
+  return PXE_STAGES[idx];
+}
+
+export interface TopoNode {
+  id: string;
+  hostname: string;
+  clusterId: string;
+  region: string;
+  role: string;
+  status: "allocated" | "idle" | "drain" | "provisioning" | "down" | "degraded";
+  gpus: number;
+  util: number;
+  temp: number;
+  power: number;
+  uptimeDays: number;
+  pod: number;
+  rack: number;
+}
+
+/**
+ * 100k-node fleet table source. Deterministic (seed 100k), weighted across the real
+ * clusters so region/cluster filters mirror the aggregate truth. ~50 lines of generation
+ * for 100,000 rows — the page virtualizes rendering, not data.
+ */
+export function generateTopologyRows(clusters: Cluster[], total = 100000): TopoNode[] {
+  const rand = seededRand(100000);
+  const weights = clusters.map((c) => c.totalNodes);
+  const wSum = weights.reduce((a, b) => a + b, 0) || 1;
+  const rows: TopoNode[] = [];
+  const perClusterTarget = clusters.map((c) => Math.max(8, Math.round((c.totalNodes / wSum) * total)));
+  clusters.forEach((c, ci) => {
+    for (let i = 0; i < perClusterTarget[ci]; i++) {
+      const r = rand();
+      const status: TopoNode["status"] =
+        r > 0.995 ? "down" : r > 0.975 ? "degraded" : r > 0.945 ? "drain" : r > 0.915 ? "provisioning" : r > 0.28 ? "allocated" : "idle";
+      const busy = status === "allocated" || status === "degraded";
+      const util = status === "down" ? 0 : status === "degraded" ? 94 + rand() * 5 : busy ? 55 + rand() * 43 : rand() * 9;
+      const pod = ["us-west", "us-east", "eu-central", "ap-south"].indexOf(c.regionCode);
+      rows.push({
+        id: `${c.id}-r${String(Math.floor(rand() * 64)).padStart(2, "0")}-n${String(i).padStart(5, "0")}`,
+        hostname: `${c.id}-r${String(Math.floor(rand() * 64)).padStart(2, "0")}-n${String(i).padStart(5, "0")}`,
+        clusterId: c.id,
+        region: c.region,
+        role: i === 0 ? "head" : rand() > 0.92 ? "storage" : "gpu-compute",
+        status,
+        gpus: i === 0 ? 0 : 8,
+        util: Math.round(util * 10) / 10,
+        temp: Math.round((status === "down" ? 30 : status === "degraded" ? 86 : busy ? 62 + rand() * 15 : 36 + rand() * 8) * 10) / 10,
+        power: Math.round(600 + util * 6 + rand() * 200),
+        uptimeDays: Math.floor(rand() * 400),
+        pod: pod < 0 ? ci % 4 : pod,
+        rack: Math.floor(rand() * 64)
+      });
+    }
+  });
+  return rows;
+}

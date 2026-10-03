@@ -23,7 +23,7 @@ export default function SchedulerPage() {
   const router = useRouter();
   const [form, setForm] = useState({
     name: "llama3-8b-sft-demo", user: "Ava Chen", appType: "fine-tune" as AppType,
-    clusterId: "helios-prod", partition: "", gpus: 8, fractional: 1, cpu: 64, mem: 512, storage: 300, network: 800, walltime: 48
+    clusterId: "helios-prod", partition: "", gpus: 8, fractional: 1, cpu: 64, mem: 512, storage: 300, network: 800, walltime: 48, spot: false
   });
   const app = APPS.find((a) => a.id === form.appType)!;
   const user = users.find((u) => u.name === form.user);
@@ -54,7 +54,8 @@ export default function SchedulerPage() {
       submittedAt: new Date().toISOString(), startedAt: null,
       gpuIds: [], framework: form.appType.includes("vllm") ? "vLLM 0.6" : form.appType.includes("sglang") ? "SGLang 0.3" : "PyTorch 2.4",
       partition: form.partition || undefined,
-      logs: `PENDING eff-pri=${effPriority} · ${freeGpus} GPUs free on ${form.clusterId} · est-start +${estPosition * 21}m (Q pos ${estPosition})${schedPolicy.backfill ? " · backfill eligible" : ""}`
+      preemptible: form.spot || undefined,
+      logs: `PENDING eff-pri=${effPriority} · ${freeGpus} GPUs free on ${form.clusterId} · est-start +${estPosition * 21}m (Q pos ${estPosition})${schedPolicy.backfill ? " · backfill eligible" : ""}${form.spot ? " · SPOT preemptible" : ""}`
     };
     launchJob(job);
     router.push("/workloads");
@@ -91,6 +92,10 @@ export default function SchedulerPage() {
             <div><div className="mb-1 flex justify-between text-xs text-zinc-400"><span>GPUs: <b className="font-mono text-white">{Math.min(form.gpus, maxG)}</b></span><span className="font-mono text-zinc-600">policy max {maxG}{part ? ` (${part.name})` : ""}</span></div><input type="range" min={1} max={Math.max(1, schedPolicy.maxGpusPerJob)} value={Math.min(form.gpus, schedPolicy.maxGpusPerJob)} onChange={(e) => setForm({ ...form, gpus: Number(e.target.value) })} className="w-full accent-[#76B900]" /></div>
             <div><div className="mb-1 flex items-center justify-between text-xs text-zinc-400"><span className="flex items-center gap-1"><Split className="h-3 w-3" /> Fractional share: <b className="font-mono text-white">{form.fractional} GPU</b></span></div>
               <select value={form.fractional} onChange={(e) => setForm({ ...form, fractional: Number(e.target.value) })} className="w-full rounded-lg border border-line bg-black/40 px-3 py-2 font-mono text-sm text-white"><option value={1}>1.0 — whole GPU</option><option value={0.5}>0.5 — half (Run:AI)</option><option value={0.25}>0.25 — quarter slice</option></select></div>
+            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-amberx/40 bg-amberx/5 px-3 py-2 text-xs text-zinc-300 sm:col-span-2">
+              <span><b className="text-amberx">Run as preemptible spot</b> — 70% cheaper, reclaimable under pressure<span className="ml-1 font-mono text-[10px] text-zinc-500">(billed 0.3× in FinOps)</span></span>
+              <input type="checkbox" checked={form.spot} onChange={(e) => setForm({ ...form, spot: e.target.checked })} className="h-4 w-4 accent-[#F5A623]" />
+            </label>
             <div><div className="mb-1 flex justify-between text-xs text-zinc-400"><span>CPU cores: <b className="font-mono text-white">{form.cpu}</b></span></div><input type="range" min={2} max={512} value={form.cpu} onChange={(e) => setForm({ ...form, cpu: Number(e.target.value) })} className="w-full accent-[#22D3EE]" /></div>
             <div><div className="mb-1 flex justify-between text-xs text-zinc-400"><span>Memory: <b className="font-mono text-white">{form.mem} GB</b></span></div><input type="range" min={8} max={4096} step={8} value={form.mem} onChange={(e) => setForm({ ...form, mem: Number(e.target.value) })} className="w-full accent-[#A78BFA]" /></div>
             <div><div className="mb-1 flex justify-between text-xs text-zinc-400"><span>Storage: <b className="font-mono text-white">{form.storage} GB</b></span></div><input type="range" min={10} max={2000} step={10} value={form.storage} onChange={(e) => setForm({ ...form, storage: Number(e.target.value) })} className="w-full accent-[#F5A623]" /></div>
@@ -107,7 +112,7 @@ export default function SchedulerPage() {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between"><span className="text-zinc-400">Scheduler verdict</span><Badge status={willQueue ? "queued" : "running"}>{willQueue ? "queued" : "running"}</Badge></div>
               <div className="flex justify-between font-mono"><span className="text-zinc-500">est. queue pos</span><span className="text-white">{willQueue ? estPosition : "— (immediate)"}</span></div>
-              <div className="flex justify-between font-mono"><span className="text-zinc-500">est. cost/hr</span><span className="text-white">${(form.gpus * (form.fractional < 1 ? form.fractional : 1) * 2.4).toFixed(2)}</span></div>
+              <div className="flex justify-between font-mono"><span className="text-zinc-500">est. cost/hr</span><span className="text-white">${(form.gpus * (form.fractional < 1 ? form.fractional : 1) * 2.4 * (form.spot ? 0.3 : 1)).toFixed(2)}{form.spot ? " (spot)" : ""}</span></div>
               <div className="flex justify-between font-mono"><span className="text-zinc-500">target</span><span className="text-white">{cluster?.id}{form.partition ? `:${form.partition}` : ""} · {app.sched}</span></div>
               <div className="flex justify-between font-mono"><span className="text-zinc-500">eff. priority</span><span className="text-nv">{effPriority}</span></div>
               <div className="flex justify-between font-mono"><span className="text-zinc-500">policy</span><span className="text-zinc-400">{schedPolicy.note}</span></div>

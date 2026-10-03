@@ -65,7 +65,7 @@ export default function WorkloadsPage() {
               <div className="mt-2"><Bar value={j.progress} color={j.status === "failed" ? "bg-rose" : j.status === "queued" ? "bg-amberx" : "bg-nv"} /></div>
               <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[11px] text-zinc-400 sm:grid-cols-4">
                 <span>👤 {j.user} <span className="text-zinc-600">({j.team})</span></span>
-                <span>🖥 {j.gpusRequested}×GPU{j.fractional ? ` (${j.fractional} slice)` : ""} · {j.cpuCores}c · {j.memGB}GB</span>
+                <span>🖥 {j.gpusRequested}×GPU{j.fractional ? ` (${j.fractional} slice)` : ""}{j.preemptible ? " · SPOT 0.3×" : ""} · {j.cpuCores}c · {j.memGB}GB</span>
                 <span>💾 {j.storageGB}GB · 🌐 {j.networkMbps}Mb/s</span>
                 <span>⏱ {j.elapsedHrs.toFixed(1)}/{j.walltimeHrs}h · ${j.costAccrued.toLocaleString()}</span>
               </div>

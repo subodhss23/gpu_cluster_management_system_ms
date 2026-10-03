@@ -1,4 +1,4 @@
-# Features — Helios GPU Management System (v0.4 + roadmap)
+# Features — Helios GPU Management System (v0.5 + roadmap)
 
 ## ✅ Shipped in this build (all clickable, all simulated)
 
@@ -98,13 +98,30 @@
 - Users' GPU/CPU/RAM usage and active-job counts move on submit, start, completion, cancel, and requeue — the Users page and scheduler quota bars are live, not seeded.
 - Started jobs are **pinned to specific sampled GPUs** (up to the visible slice): workload cards show `pinned N GPUs → node-a, node-b`, and the GPU inspector links each card back to its job. Cancel/retry/completion releases pins.
 
+## ✅ Wave 5 — web scale: 100k topology, spot pools, canaries, PXE
+
+### 1. Fabric topology at 100k nodes (/topology)
+- Deterministic 100k-row fleet table (seed 100k, weighted across real clusters/regions) with **windowed virtualization** — only ~35 rows in the DOM at any scroll position — plus hostname search, cluster/status filters, per-status share chips, and live counts.
+- Clickable **InfiniBand fat-tree SVG** (core → agg → 4 leaves → host blocks per region pod), leaf color = worst health in pod, click-to-filter the table, hover counts.
+
+### 2. Spot pools + preemption (cluster detail, scheduler, billing)
+- Per-cluster **spot pool card**: 20% capacity at 70% off, live spot-job count, reclaim order preview (lowest effective priority first), and a **Reclaim N** simulator that preempts running jobs back to queued with checkpoints kept (quota stays reserved).
+- Launch wizard **preemptible spot checkbox** (0.3× billing, reclaimable); FinOps bills spot at 30%; workload rows badge `SPOT 0.3×`.
+
+### 3. Canary releases (/serving)
+- Per-endpoint canary: start with version + traffic % (5/10/25/50), live canary traffic readout vs stable, traffic slider, **Promote to stable** / **Rollback** with timeline entries.
+
+### 4. PXE provisioning state machine (/nodes)
+- Pipeline `discovery → dhcp → ipxe → imaging → burn-in → ready` with per-node progress advancing every tick; nodes land `ready → idle` with a provisioner timeline entry.
+- Live **PXE pipeline card** (stage-segment bars per node), per-node **Reimage** button restarting from discovery, old saves migrate (stageless provisioning nodes resume at 50%).
+
 ## 🗺 Roadmap (from PRD phases 2b / 3b)
-- [ ] Virtualized 100k-node table + IB topology map.
+- [x] Virtualized 100k-node table + IB topology map (wave 5).
 - [x] Slurm partition editor (wave 3).
-- [ ] PXE state machine per node (discovery → provision → burn-in → allocated).
+- [x] PXE state machine per node (wave 5).
 - [x] MIG slice carve/release + Run:AI fractional billing (wave 2).
 - [ ] Full MIG profile editor (named 1g/2g/3g/4g/7g geometries) + Run:AI policy simulator.
 - [x] Endpoint autoscaling policies (wave 2).
-- [ ] Canary deploys + spot/preempt pool.
+- [x] Canary deploys + spot/preempt pool (wave 5).
 - [x] Cost ledger + team chargeback CSV + checkpoint browser (wave 2).
 - [ ] Vitest suite for sim determinism/tick bounds/quota math; Playwright smoke for acceptance flows.

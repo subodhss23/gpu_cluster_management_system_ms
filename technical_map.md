@@ -134,6 +134,11 @@ Per cluster: **1 head node** (EPYC 9654, 192c, labels `mgr,slurmctld,login`) + *
 
 ### 4.9 `fleetTotals(clusters)` — KPI sums (GPUs, nodes, PB, kW cap).
 
+### 4.10 Wave-5 engine additions
+- `effPriorityOf(job, users, teamWeight)` = `round(user.priority × teamWeight[team] ?? 50×1)` — single source used by the tick loop, queue previews, and preemption order.
+- PXE: `PXE_STAGES` (`discovery, dhcp, ipxe, imaging, burn-in, ready`); `pxeStageFor(progress)` maps 0–100 onto stage index; generator seeds provisioning tail nodes at `imaging / 30–70 %`.
+- `generateTopologyRows(clusters, total=100000)` → `TopoNode[]` with per-cluster weights from `totalNodes` (min 8 each), status mix down 0.5 / degraded 2 / drain 3 / provisioning 3 / allocated ~64 / idle ~28 %, pod from `regionCode`, rack 0–63.
+
 ---
 
 ## 5. Store — `src/lib/store.tsx` (`FleetProvider`, ~629 lines)
@@ -156,17 +161,19 @@ Per cluster: **1 head node** (EPYC 9654, 192c, labels `mgr,slurmctld,login`) + *
 | 1 | `simH = speed × 2.5 / 3600` | 720× default → 0.5 sim-hour/tick |
 | 2 | **Completions** | running jobs with `elapsed + simH ≥ walltime` → `completed, progress 100` |
 | 3 | **Scheduler loop** | queued jobs sorted by `effPriority = user.priority × teamWeight[team]`; start while `gpusRequested ≤ freeFor(cluster)` (completions excluded, starters accumulate); writes `placed on … · eff-pri` log |
-| 4 | **GPU write** | release completions → pin starters (≤64 sampled) → `tickGpu` jitter all → single `setFleet` |
+| 4 | **GPU write** | release completions → pin starters (≤64 sampled) → `tickGpu` jitter all |
+| 4b | **PXE advance** | provisioning nodes `progress += 6 + rand×14` (stageless old saves resume at 50); at 100 → `idle` + `ready` + provisioner timeline entry; single `setFleet` with both slices |
 | 5 | **History** | fleet + per-cluster `snapshotTelemetry` appended, capped at **60 pts** |
 | 6 | **Jobs write** | completions / starters (with `gpuIds`) / `elapsed += simH`, `progress = elapsed/walltime × 100` |
 | 7 | **Quotas + timeline** | completed jobs refund GPU/CPU/RAM/activeJobs; STARTED/COMPLETED entries pushed (cap 120) |
 | 8 | **Autoscale** | per endpoint: RPS jitter ±~4.5 %; scale **up** if `rps > target×1.15` (till max), **down** if `< target×0.45` (till min); p99 drifts with load; every scale event → timeline |
 | 9 | **Alert rules** | per enabled rule past `cooldownSec`: temp (hottest GPU), util (≥2 GPUs), power, ecc, queue (backlog depth); fire → `fired[]` (cap 60) + mirrored timeline entry |
 
-### 5.5 All 30 actions (grouped)
+### 5.5 All 36 actions (grouped)
+- **Lifecycle:** `launchJob` (always queued + quota reserved), `cancelJob` (pins + quota released), `retryJob` (re-queued + quota re-reserved), `preemptJobs(clusterId, count)` (lowest eff-priority running → queued, pins released, quota stays reserved), `reimageNode` (status → provisioning from discovery).
 - **Lifecycle:** `launchJob` (always queued + quota reserved), `cancelJob` (pins + quota released), `retryJob` (re-queued + quota re-reserved).
 - **Clusters/nodes:** `addCluster` (generates slice), `updateCluster` (mix edits regenerate slice + refresh partition GPU types), `removeCluster` (cancels jobs, drops endpoints + partitions), `updateNode`, `drainNode/undrainNode`, `setGpuPowerLimit`, `setMig` (sliced status at >0 slices).
-- **Serving:** `addEndpoint/removeEndpoint/scaleEndpoint` (clamped to policy min/max, sets `scaling`), `updatePolicy`.
+- **Serving:** `addEndpoint/removeEndpoint/scaleEndpoint` (clamped to policy min/max, sets `scaling`), `updatePolicy`, canary lifecycle (`startCanary/setCanaryTraffic/promoteCanary/rollbackCanary`).
 - **Alerts:** `addRule/removeRule/toggleRule/ackFired`.
 - **Config:** `addPartition/updatePartition/removePartition`, `updateSchedPolicy`, `saveBlueprint/addBlueprint/removeBlueprint/instantiateBlueprint` (cluster + partitions provisioned together).
 - **Meta:** `toggleLive`, `setSimSpeed` (logs the change), `resetDemo` (clears LS, rebuilds everything incl. pins + history), `pushActivity` (prepend, cap 120).
@@ -189,6 +196,7 @@ Full mirror `{clusters, jobs, users, endpoints, rules, nodes, gpus, partitions, 
 - `clusterGpuPrice(c)` = mix-weighted $/GPU-hr.
 - `jobSpend` = `costAccrued + elapsed × gpus × slice × price` (queued/cancelled → accrued only).
 - `jobProjected` = spend + `remaining × gpus × slice × price` (running only).
+- Spot: `preemptible` jobs bill `SPOT_MULT = 0.3×` in both functions.
 - `toCsv` (quoted, escaped), `money` ($, 0 decimals), `TEAM_BUDGETS` (120k/60k/40k/25k/2k).
 
 ### 6.3 `checkpoints.ts` — deterministic resume points
@@ -222,16 +230,17 @@ Full mirror `{clusters, jobs, users, endpoints, rules, nodes, gpus, partitions, 
 |---|---|---|---|
 | `/` overview | everything + `history` | — | Hero CTAs; 6 KPIs; live stream + chips; donut + capacity; 72-cell heatmap; top-3 alerts; cluster/job previews; platform strip |
 | `/clusters` | clusters/nodes/gpus | add/remove/update (via wizard + `ClusterEditor`) | Provisioning wizard (8-GPU steps); decommission confirm cascades |
-| `/clusters/[id]` | cluster slice + `clusterHistory[id]` + partitions/jobs/activity | partition CRUD, `ClusterEditor` | KPIs, live stream, heatmap, nodes, hot GPUs, jobs, power bar + headroom line, cluster-scoped events card, partitions table (inline numeric editing) |
+| `/clusters/[id]` | cluster slice + `clusterHistory[id]` + partitions/jobs/activity | partition CRUD, `ClusterEditor`, **`preemptJobs`** | KPIs, live stream, heatmap, nodes, hot GPUs, jobs, power bar + headroom line, cluster-scoped events card, **spot pool card** (20% capacity, reclaim preview + Reclaim N), partitions table (inline numeric editing) |
 | `/cluster-detail` | — | — | Legacy alias → links to `/clusters` |
-| `/nodes` | nodes/gpus/clusters | power caps, MIG, drain, node config | Search + filters; 220-cell heatmap; live inspector (Inspect/Configure tabs, `key={node.id}` form); empty state shows status census + fleet avg temp/power |
+| `/nodes` | nodes/gpus/clusters | power caps, MIG, drain, **reimage**, node config | Search + filters; 220-cell heatmap; live inspector (Inspect/Configure tabs, `key={node.id}` form); empty state shows status census + fleet avg temp/power; **PXE pipeline card** (stage segments, per-node progress, tick-advanced) |
 | `/workloads` | jobs (+gpuIds→nodes) | cancel/retry/restore | Status filters; Logs/Checkpoints tabs; pinned-placement line; manifest download |
-| `/scheduler` | clusters/partitions/policy/users/jobs | `launchJob` | App→cluster→partition→resources; sliders clamped to `min(policy, partition)`; verdict from `clusterFreeGpus`; always-queued submit; right rail adds clickable per-cluster capacity bars (retargets form) |
+| `/scheduler` | clusters/partitions/policy/users/jobs | `launchJob` | App→cluster→partition→resources; sliders clamped to `min(policy, partition)`; verdict from `clusterFreeGpus`; always-queued submit; **spot checkbox** (sets `preemptible`, 0.3× cost estimate); right rail adds clickable per-cluster capacity bars (retargets form) |
 | `/policies` | policy/users/jobs/clusters | `updateSchedPolicy` | Limit sliders, engine toggles, team weights, live queue-order preview, effective priorities, factory reset; empty queue shows per-cluster free-GPU bars |
-| `/serving` | endpoints/clusters | endpoint CRUD/scale/policy | Policy editor, manual ±, deploy wizard, undeploy confirm; dashed Deploy card fills grid + shows live replica/RPS totals; module-scope `EndpointCard` (stable hooks across ticks) |
+| `/serving` | endpoints/clusters | endpoint CRUD/scale/policy/**canary** | Policy editor, manual ±, deploy wizard, undeploy confirm; dashed Deploy card fills grid + shows live replica/RPS totals; canary start/traffic/promote/rollback; module-scope `EndpointCard` (stable hooks across ticks) |
 | `/users` | users/jobs | — | Budget bars, roles, live usage |
 | `/billing` | clusters/jobs/users | — | Burned/projected/burn-multiple/top-team; burn chart; team donut + budget bars; top jobs; price book; CSV + JSON export |
 | `/monitoring` | history/activity/gpus + `tick` | severity filter (local) | 4 live streams + sample counter, timeline spine, top-power, PROMQL card, latest-job-transitions feed |
+| `/topology` *(wave 5)* | clusters (for weights) | filters (local) | Deterministic 100k rows (`generateTopologyRows`, seed 100k); windowed virtualization (~35 rows in DOM, 36 px rows, overscan 12); clickable fat-tree SVG (worst-health leaf coloring, pod→region filter); status share chips; `sinfo`-style footer |
 | `/alerts` | rules/fired/clusters | rule CRUD/ack | Creator form (metric presets), armed/dimmed rule rows, firing feed, coverage strip (armed count, metrics, cooldowns) |
 | `/diagnostics` | gpus/jobs | chat (local), diag runner, `pushActivity` | Signals card (throttled/down/queued + hottest GPU), rule-based agent (thermal/XID/queue/power/latency intents), staged `dcgmi` transcript, known-issues board |
 | `/blueprints` | blueprints/clusters | snapshot/instantiate/import/export/delete | Template cards with partition counts, launch-by-name, file import with validation |
@@ -279,6 +288,10 @@ Endpoint RPS jitters above `target × 1.15` → replicas +1 (≤ max), status `s
 | Autoscale hysteresis | up > 1.15×, down < 0.45× target | tick step 8 |
 | RPS jitter | ±~4.5 %/tick, p99 ±25 + load bias | tick step 8 |
 | Throttled util floor | sampled GPUs pinned only if idle | `allocateGpus` |
+| PXE advance | `+6 + rand×14` %/tick; ready at 100 | tick step 4b |
+| Spot pool | 20 % of cluster GPUs, 0.3× billing, reclaim lowest eff-pri first | cluster detail / `preemptJobs` / `finops` |
+| Canary | 1 replica, traffic 0–100 %, promote/rollback | `startCanary…` / serving card |
+| Topology rows | 100k, seed 100000, 36 px rows, overscan 12 | `generateTopologyRows` / `/topology` |
 | LocalStorage keys | `helios-fleet-v2` (full mirror) · `helios-theme` | store / theme |
 | Export sample | 25 GPUs in fleet JSON | Topbar |
 
