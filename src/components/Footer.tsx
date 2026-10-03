@@ -18,7 +18,7 @@ export default function Footer() {
         <span className="font-mono">
           {clusters.length} clusters · {fmtNum(clusters.reduce((a, c) => a + c.totalGPUs, 0))} GPUs · {fmtNum(gpus.length)} live · {running} running / {queued} queued
         </span>
-        <span className="ml-auto hidden font-mono md:inline">simulated telemetry · no hardware touched · Built in California by Subodh</span>
+        <span className="ml-auto hidden font-mono md:inline">Built in California by Subodh</span>
       </div>
     </footer>
   );
